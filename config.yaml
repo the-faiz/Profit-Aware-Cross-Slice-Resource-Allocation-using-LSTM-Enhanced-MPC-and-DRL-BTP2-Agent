@@ -1,0 +1,68 @@
+main:
+  random_seed: 42
+
+environment:
+  area_km: 10.0
+
+ru:
+  ru_x_km: 0.0
+  ru_y_km: 0.0
+
+users:
+  num_ues: 100
+
+channel:
+  p_tx_dbm: 46.0
+  path_loss_offset: 128.1
+  path_loss_slope: 37.6
+  interference_base_dbm: -90.0
+  interference_edge_gain_dbm: 10.0
+  noise_bandwidth_hz: 180000.0
+  thermal_noise_density_dbm_hz: -174.0
+  min_distance_km: 0.01
+
+tiers:
+  tier-1:
+    target_rate_mpbs: 20
+    weight: 3
+    subscription_fee: 100
+    probability: 0.2
+  tier-2:
+    target_rate_mbps: 10
+    weight: 2
+    subscription_fee: 80
+    probability: 0.3
+  tier-3:
+    traget_rate_mpbs: 5
+    weight: 1
+    subscription_fee: 50
+    probability: 0.5
+
+mobility_pattern:
+  std_s: 1.0
+  clip_to_area: true
+
+lstm:
+  input_len: 20
+  pred_len: 5
+
+  training:
+    num_ues: 100
+    num_steps: 1000
+    epochs: 20
+    batch_size: 128
+    lr: 0.001
+    hidden_size: 64
+    num_layers: 2
+    model_out: "lstm_model.pt"
+    norm_out: "lstm_norm.json"
+    device: "auto"
+    dataset_csv: "lstm_training_dataset.csv"
+
+  inference:
+    num_ues: 1
+    num_steps: 30
+    model: "lstm_model.pt"
+    norm: "lstm_norm.json"
+    device: "auto"
+    dataset_csv: "inference_dataset.csv"

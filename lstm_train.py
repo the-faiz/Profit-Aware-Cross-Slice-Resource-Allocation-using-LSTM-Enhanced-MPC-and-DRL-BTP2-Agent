@@ -12,32 +12,14 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from utils import load_config, build_windows, rows_to_trajectories, write_csv
 from mobility_pattern_genererator import MobilityPatternGenerator
+from lstm_model import LSTMModel
 
 Point = Tuple[float, float]
 Trajectory = List[Point]
 UserState = Tuple[int, int, float, float, str]
 
 
-class LSTMForecaster(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int, num_layers: int, pred_len: int):
-        super().__init__()
-        self.pred_len = pred_len
-        self.lstm = nn.LSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            batch_first=True,
-        )
-        self.fc = nn.Linear(hidden_size, pred_len * 2)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out, _ = self.lstm(x)
-        last = out[:, -1, :]
-        y = self.fc(last)
-        return y.view(x.size(0), self.pred_len, 2)
-
-
-def main() -> None:
+def train() -> None:
     print("LSTM TRAINING PIPELINE STARTS")
     
     cfg = load_config("config.yaml")
@@ -89,7 +71,7 @@ def main() -> None:
     if device_cfg == "auto":
         device_cfg = "cuda" if torch.cuda.is_available() else "cpu"
     device = torch.device(device_cfg)
-    model = LSTMForecaster(2, hidden_size, num_layers, pred_len).to(device)
+    model = LSTMModel(2, hidden_size, num_layers, pred_len).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.MSELoss()
     
@@ -129,4 +111,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    train()

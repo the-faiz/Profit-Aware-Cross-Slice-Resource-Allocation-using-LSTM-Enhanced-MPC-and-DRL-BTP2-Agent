@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
-from utils import load_config
-from lstm_train import main as train_lstm_main
-from lstm_forecast import main as lstm_forecast_main
+from utils import load_config, write_csv
+from mobility_pattern_genererator import MobilityPatternGenerator
 
 
 def main() -> None:
-    cfg = load_config("config.yaml")
+    cfg = load_config("config.yaml")    
+    sim_cfg = cfg["simulation"]
+    num_ues = int(sim_cfg["num_ues"])
+    num_steps = int(sim_cfg["num_steps"])
 
-    print("Training Already Done")
+    print(f"Simulation Starting for {num_ues} users and {num_steps} steps")
 
-    print("Inference phase")
-    lstm_forecast_main()
+    gen = MobilityPatternGenerator(num_ues, num_steps)
+    rows = gen.generate_mobility_pattern()
+    write_csv(sim_cfg["dataset_csv"], rows)
 
 
 if __name__ == "__main__":

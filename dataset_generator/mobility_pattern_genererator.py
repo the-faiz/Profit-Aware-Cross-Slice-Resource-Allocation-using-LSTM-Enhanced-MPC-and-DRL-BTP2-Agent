@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Sequence, Tuple
 import random
 
-from utils import load_config
+from utilities.utils import load_config
 
 Point = Tuple[float, float]
 Trajectory = List[Point]
@@ -12,7 +12,7 @@ UserState = Tuple[int, int, float, float, str]
 
 class MobilityPatternGenerator:
     def __init__(self, num_ues: int, num_steps: int):
-        cfg = load_config("config.yaml")
+        cfg = load_config("configurations/config.yaml")
         main_cfg = cfg["main"]
         env_cfg = cfg["environment"]
         mob_cfg = cfg["mobility_pattern"]

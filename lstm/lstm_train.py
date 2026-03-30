@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 from typing import List, Sequence, Tuple
 
@@ -10,9 +11,8 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from utils import load_config, build_windows, rows_to_trajectories, write_csv
-from mobility_pattern_genererator import MobilityPatternGenerator
-from lstm_model import LSTMModel
+from utilities.utils import load_config, build_windows, rows_to_trajectories
+from lstm.lstm_model import LSTMModel
 
 Point = Tuple[float, float]
 Trajectory = List[Point]
@@ -22,7 +22,7 @@ UserState = Tuple[int, int, float, float, str]
 def train() -> None:
     print("LSTM TRAINING PIPELINE STARTS")
     
-    cfg = load_config("config.yaml")
+    cfg = load_config("configurations/config.yaml")
     lstm_cfg = cfg["lstm"]
     training_cfg = cfg["lstm"]["training"]
     seed = int(cfg["main"]["random_seed"])
@@ -46,12 +46,11 @@ def train() -> None:
     norm_out = str(training_cfg["norm_out"])
     device_cfg = str(training_cfg["device"])
 
-    print("Generating Dataset")
-    gen = MobilityPatternGenerator(num_ues, num_steps)
-    rows = gen.generate_mobility_pattern()
-    write_csv(training_cfg["dataset_csv"], rows)
-    print("Dataset Generated Successfully and saved to CSV")
-
+    with open(training_cfg["dataset_csv"], "r", encoding="utf-8") as f:
+        rows = [
+            (int(r["t"]), int(r["ue_id"]), float(r["x_km"]), float(r["y_km"]), r["tier"])
+            for r in csv.DictReader(f)
+        ]
     trajectories = rows_to_trajectories(rows, num_ues)
 
     X, Y = build_windows(trajectories, input_len, pred_len)

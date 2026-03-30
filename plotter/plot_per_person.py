@@ -3,15 +3,14 @@ from __future__ import annotations
 import glob
 import os
 import re
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 
 
 def _parse_log(path: str) -> List[Tuple[int, float, float, float]]:
     """
-    Parse a simulation log file and return rows of:
-    (num_ues, avg_reward, avg_profit, avg_satisfied_users)
+    Return rows of (num_ues, avg_reward, avg_profit, avg_satisfied_users).
     """
     rows: List[Tuple[int, float, float, float]] = []
     current_ues: int | None = None
@@ -29,10 +28,8 @@ def _parse_log(path: str) -> List[Tuple[int, float, float, float]]:
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-
             sim_match = sim_re.match(line)
             if sim_match:
-                # If a previous block was partially parsed, discard it.
                 current_ues = int(sim_match.group(1))
                 avg_reward = None
                 avg_profit = None
@@ -71,41 +68,17 @@ def _parse_log(path: str) -> List[Tuple[int, float, float, float]]:
     return rows
 
 
-def _plot_metric(
-    data: Dict[str, List[Tuple[int, float]]],
-    metric_name: str,
-    y_label: str,
-    out_path: str,
+def plot_per_person_from_logs(
+    logs_dir: str = "logs",
+    out_dir: str = "results",
 ) -> None:
-    plt.figure()
-    for optimizer, series in sorted(data.items()):
-        xs = [x for x, _ in series]
-        ys = [y for _, y in series]
-        if not xs:
-            continue
-        plt.plot(xs, ys, marker="o", label=optimizer)
-    plt.xlabel("Number of UEs")
-    plt.ylabel(y_label)
-    plt.title(f"Number of UEs vs {metric_name} (All Optimizers)")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(out_path)
-    plt.close()
-
-
-def main() -> None:
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    logs_dir = os.path.join(root_dir, "logs")
-    out_dir = os.path.join(root_dir, "results", "combined")
-    os.makedirs(out_dir, exist_ok=True)
-
+    """
+    Plot per-person metrics vs number of UEs for each optimizer log.
+    Outputs to results/<optimizer>/.
+    """
     log_paths = sorted(glob.glob(os.path.join(logs_dir, "simulation_*.log")))
     if not log_paths:
         raise SystemExit(f"No log files found in {logs_dir}")
-
-    reward_data: Dict[str, List[Tuple[int, float]]] = {}
-    profit_data: Dict[str, List[Tuple[int, float]]] = {}
-    satisfied_data: Dict[str, List[Tuple[int, float]]] = {}
 
     for path in log_paths:
         optimizer = os.path.basename(path).replace("simulation_", "").replace(".log", "")
@@ -114,31 +87,45 @@ def main() -> None:
             continue
         rows.sort(key=lambda r: r[0])
 
-        reward_data[optimizer] = [(r[0], r[1]) for r in rows]
-        profit_data[optimizer] = [(r[0], r[2]) for r in rows]
-        satisfied_data[optimizer] = [(r[0], r[3]) for r in rows]
+        xs = [r[0] for r in rows]
+        avg_reward_pp = [r[1] / r[0] if r[0] else 0.0 for r in rows]
+        avg_profit_pp = [r[2] / r[0] if r[0] else 0.0 for r in rows]
+        avg_satisfied_pp = [r[3] / r[0] if r[0] else 0.0 for r in rows]
 
-    _plot_metric(
-        profit_data,
-        "Profit",
-        "Average Profit",
-        os.path.join(out_dir, "nues_vs_profit_all.png"),
-    )
-    _plot_metric(
-        reward_data,
-        "Reward",
-        "Average Reward",
-        os.path.join(out_dir, "nues_vs_reward_all.png"),
-    )
-    _plot_metric(
-        satisfied_data,
-        "Satisfaction",
-        "Average Satisfied Users",
-        os.path.join(out_dir, "nues_vs_satisfaction_all.png"),
-    )
+        opt_out_dir = os.path.join(out_dir, optimizer)
+        os.makedirs(opt_out_dir, exist_ok=True)
 
-    print(f"Saved combined plots to {out_dir}")
+        plt.figure()
+        plt.plot(xs, avg_reward_pp, marker="o")
+        plt.xlabel("Number of UEs")
+        plt.ylabel("Average Reward per Person")
+        plt.title("Number of UEs vs Average Reward per Person")
+        plt.tight_layout()
+        plt.savefig(os.path.join(opt_out_dir, f"nues_vs_reward_per_person_{optimizer}.png"))
+        plt.close()
+
+        plt.figure()
+        plt.plot(xs, avg_profit_pp, marker="o")
+        plt.xlabel("Number of UEs")
+        plt.ylabel("Average Profit per Person")
+        plt.title("Number of UEs vs Average Profit per Person")
+        plt.tight_layout()
+        plt.savefig(os.path.join(opt_out_dir, f"nues_vs_profit_per_person_{optimizer}.png"))
+        plt.close()
+
+        plt.figure()
+        plt.plot(xs, avg_satisfied_pp, marker="o")
+        plt.xlabel("Number of UEs")
+        plt.ylabel("Average Satisfaction per Person")
+        plt.title("Number of UEs vs Average Satisfaction per Person")
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(opt_out_dir, f"nues_vs_satisfaction_per_person_{optimizer}.png")
+        )
+        plt.close()
+
+    print("Saved per-person plots for each optimizer.")
 
 
 if __name__ == "__main__":
-    main()
+    plot_per_person_from_logs()

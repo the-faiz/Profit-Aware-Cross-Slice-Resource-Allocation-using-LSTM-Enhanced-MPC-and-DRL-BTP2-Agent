@@ -5,10 +5,10 @@ from __future__ import annotations
 import argparse
 import os
 
-from dataset_generator.mobility_pattern_genererator import MobilityPatternGenerator
+from dataset_generator.simulation_dataset_generator import generate_simulation_dataset
 from plotter.plotter import save_results_plots
 from simulation.mpc_simulator import MPCSimulator
-from utilities.utils import load_config, write_csv
+from utilities.utils import load_config
 
 
 def main() -> None:
@@ -23,7 +23,7 @@ def main() -> None:
     print(f"Optimizer selected: {args.optimizer}")
 
     print("Loading the configuration")
-    cfg = load_config("configurations/config.yaml")
+    cfg = load_config()
     sim_cfg = cfg["simulation"]
     num_steps = int(sim_cfg["num_steps"])
     num_ues_list = sim_cfg.get("num_ues_list")
@@ -42,9 +42,7 @@ def main() -> None:
             num_ues = int(n)
             print(f"Number of UEs: {num_ues}, Number of steps: {num_steps}")
             print("Generating mobility patterns")
-            gen = MobilityPatternGenerator(num_ues, num_steps)
-            rows = gen.generate_mobility_pattern()
-            write_csv(sim_cfg["dataset_csv"], rows)
+            generate_simulation_dataset(num_ues=num_ues)
             print("MPC Simulation phase")
             stats = MPCSimulator(
                 optimizer_name=args.optimizer,

@@ -22,7 +22,7 @@ UserState = Tuple[int, int, float, float, str]
 def train() -> None:
     print("LSTM TRAINING PIPELINE STARTS")
     
-    cfg = load_config("configurations/config.yaml")
+    cfg = load_config()
     lstm_cfg = cfg["lstm"]
     training_cfg = cfg["lstm"]["training"]
     seed = int(cfg["main"]["random_seed"])

@@ -4,10 +4,8 @@ from utilities.utils import load_config, write_csv
 from dataset_generator.mobility_pattern_genererator import MobilityPatternGenerator
 
 
-def generate_lstm_training_dataset(
-    config_path: str = "configurations/config.yaml",
-) -> None:
-    cfg = load_config(config_path)
+def generate_lstm_training_dataset() -> None:
+    cfg = load_config()
     training_cfg = cfg["lstm"]["training"]
     num_ues = int(training_cfg["num_ues"])
     num_steps = int(training_cfg["num_steps"])

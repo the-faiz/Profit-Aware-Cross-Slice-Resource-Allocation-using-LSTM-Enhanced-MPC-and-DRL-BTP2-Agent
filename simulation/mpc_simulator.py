@@ -45,12 +45,11 @@ Point = Tuple[float, float]
 class MPCSimulator:
     def __init__(
         self,
-        config_path: str = "configurations/config.yaml",
         optimizer_name: str = "ga",
         num_ues_override: int | None = None,
         log_file=None,
     ) -> None:
-        cfg = load_config(config_path)
+        cfg = load_config()
 
         self.sim_cfg   = cfg["simulation"]
         self.lstm_cfg  = cfg["lstm"]

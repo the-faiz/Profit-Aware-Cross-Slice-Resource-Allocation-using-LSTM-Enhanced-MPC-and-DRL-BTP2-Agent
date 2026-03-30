@@ -12,7 +12,7 @@ UserState = Tuple[int, int, float, float, str]
 
 class MobilityPatternGenerator:
     def __init__(self, num_ues: int, num_steps: int):
-        cfg = load_config("configurations/config.yaml")
+        cfg = load_config()
         main_cfg = cfg["main"]
         env_cfg = cfg["environment"]
         mob_cfg = cfg["mobility_pattern"]

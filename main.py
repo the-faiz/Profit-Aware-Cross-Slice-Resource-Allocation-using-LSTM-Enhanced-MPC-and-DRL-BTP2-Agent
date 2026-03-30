@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import os
 
-from utilities.utils import load_config, write_csv
 from dataset_generator.mobility_pattern_genererator import MobilityPatternGenerator
+from plotter.plotter import save_results_plots
 from simulation.mpc_simulator import MPCSimulator
+from utilities.utils import load_config, write_csv
 
 
 def main() -> None:
@@ -23,18 +25,37 @@ def main() -> None:
     print("Loading the configuration")
     cfg = load_config("configurations/config.yaml")
     sim_cfg = cfg["simulation"]
-    num_ues = int(sim_cfg["num_ues"])
     num_steps = int(sim_cfg["num_steps"])
+    num_ues_list = sim_cfg.get("num_ues_list")
 
-    print(f"Number of UEs: {num_ues}, Number of steps: {num_steps}")
+    if not isinstance(num_ues_list, list) or not num_ues_list:
+        raise ValueError(
+            "simulation.num_ues_list must be provided as a non-empty list "
+            "in configurations/config.yaml."
+        )
 
-    print("Generating mobility patterns")
-    gen = MobilityPatternGenerator(num_ues, num_steps)
-    rows = gen.generate_mobility_pattern()
-    write_csv(sim_cfg["dataset_csv"], rows)
+    results = []
+    log_path = f"logs/simulation_{args.optimizer}.log"
+    os.makedirs("logs", exist_ok=True)
+    with open(log_path, "w", encoding="utf-8") as log_f:
+        for idx, n in enumerate(num_ues_list):
+            num_ues = int(n)
+            print(f"Number of UEs: {num_ues}, Number of steps: {num_steps}")
+            print("Generating mobility patterns")
+            gen = MobilityPatternGenerator(num_ues, num_steps)
+            rows = gen.generate_mobility_pattern()
+            write_csv(sim_cfg["dataset_csv"], rows)
+            print("MPC Simulation phase")
+            stats = MPCSimulator(
+                optimizer_name=args.optimizer,
+                num_ues_override=num_ues,
+                log_file=log_f,
+            ).run()
+            results.append((num_ues, stats))
+            if idx < len(num_ues_list) - 1:
+                print("-" * 80)
 
-    print("MPC Simulation phase")
-    MPCSimulator(optimizer_name=args.optimizer).run()
+    save_results_plots(results, args.optimizer)
 
 
 if __name__ == "__main__":

@@ -72,7 +72,7 @@ lstm:
     dataset_csv: "lstm/lstm_training_dataset.csv"
 
 simulation:
-  num_ues: 100
+  num_ues_list: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
   num_steps: 30
   prediction_horizon: 5
   control_horizon: 5

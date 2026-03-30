@@ -47,6 +47,8 @@ class MPCSimulator:
         self,
         config_path: str = "configurations/config.yaml",
         optimizer_name: str = "ga",
+        num_ues_override: int | None = None,
+        log_file=None,
     ) -> None:
         cfg = load_config(config_path)
 
@@ -63,7 +65,11 @@ class MPCSimulator:
         # and pass as-is to the optimizer (it appears directly in objective).
         self.penalty_lambda = float(cfg["lambda"])
 
-        self.num_ues   = int(self.sim_cfg["num_ues"])
+        if num_ues_override is None:
+            raise ValueError(
+                "num_ues_override must be provided when running batch simulations."
+            )
+        self.num_ues   = int(num_ues_override)
         self.num_steps = int(self.sim_cfg["num_steps"])
         self.num_prbs  = int(self.prb_cfg["num_prbs"])
         self.prb_bw    = float(self.prb_cfg["bandwidth_hz"])
@@ -80,6 +86,7 @@ class MPCSimulator:
         self.log_enabled = bool(self.log_cfg.get("enabled", True))
         self.log_path = str(self.log_cfg.get("path", "logs/simulation.log"))
         self.log_append = bool(self.log_cfg.get("append", False))
+        self._external_log_file = log_file
 
         # horizon = min of pred horizon, control horizon, and LSTM output length
         self.model, self.mean, self.std, self.device = self._load_model()
@@ -200,21 +207,26 @@ class MPCSimulator:
         )
         sep_line = "-" * 100
 
-        log_f = None
-        if self.log_enabled:
+        sim_line = (
+            f"Simulating {self.num_ues} UEs | "
+            f"{self.num_steps - start_t} steps | "
+            f"horizon={self.horizon} | PRBs={self.num_prbs}"
+        )
+        print(sim_line)
+
+        log_f = self._external_log_file
+        if log_f is None and self.log_enabled:
             log_dir = os.path.dirname(self.log_path) or "."
             os.makedirs(log_dir, exist_ok=True)
             mode = "a" if self.log_append else "w"
             log_f = open(self.log_path, mode, encoding="utf-8")
-            log_f.write(
-                f"Simulating {self.num_ues} UEs | "
-                f"{self.num_steps - start_t} steps | "
-                f"horizon={self.horizon} | PRBs={self.num_prbs}\n"
-            )
+        if log_f is not None:
+            log_f.write(sim_line + "\n")
             log_f.write(header_line + "\n")
             log_f.write(sep_line + "\n")
 
         profit_list: List[float] = []
+        satisfied_counts: List[int] = []
 
         for t in range(start_t, self.num_steps):
             # Build horizon: actual position at h=0, LSTM predictions for h>0
@@ -230,6 +242,8 @@ class MPCSimulator:
 
             tier_sat = info["tier_sat"]
             tier_stats = info["tier_stats"]
+            satisfied_total = sum(tier_sat.values())
+            satisfied_counts.append(int(satisfied_total))
             if log_f is not None:
                 log_f.write(
                     f"{t:>4}  {info['reward']:>10.2f}  {info['reward_base']:>10.2f}  "
@@ -242,17 +256,29 @@ class MPCSimulator:
         elapsed = time.time() - t0
         avg_r   = float(np.mean(rewards)) if rewards else 0.0
         avg_profit = float(np.mean(profit_list)) if profit_list else 0.0
-        print(sep_line)
+        avg_satisfied = float(np.mean(satisfied_counts)) if satisfied_counts else 0.0
+        avg_satisfied_ratio = avg_satisfied / max(self.num_ues, 1)
         print(f"Average reward : {avg_r:.4f}")
         print(f"Average profit : {avg_profit:.4f}")
+        print(f"Average satisfied users : {avg_satisfied:.2f}")
         print(f"Total time     : {elapsed:.1f}s  "
               f"({elapsed / max(len(rewards), 1):.3f}s per step)")
+        print(sep_line)
         if log_f is not None:
-            log_f.write(sep_line + "\n")
             log_f.write(f"Average reward : {avg_r:.4f}\n")
             log_f.write(f"Average profit : {avg_profit:.4f}\n")
+            log_f.write(f"Average satisfied users : {avg_satisfied:.2f}\n")
             log_f.write(
                 f"Total time     : {elapsed:.1f}s  "
                 f"({elapsed / max(len(rewards), 1):.3f}s per step)\n"
             )
-            log_f.close()
+            log_f.write(sep_line + "\n")
+            if self._external_log_file is None:
+                log_f.close()
+
+        return {
+            "avg_reward": avg_r,
+            "avg_profit": avg_profit,
+            "avg_satisfied_users": avg_satisfied,
+            "avg_satisfied_ratio": avg_satisfied_ratio,
+        }

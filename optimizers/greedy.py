@@ -15,6 +15,8 @@ class GreedyOptimizer(BaseOptimizer):
         num_prbs,
         prb_cost,
         prb_bw,
+        gamma,
+        horizon,
         ru_x,
         ru_y,
         channel,
@@ -26,6 +28,8 @@ class GreedyOptimizer(BaseOptimizer):
         super().__init__(num_prbs)
         self.prb_cost = prb_cost
         self.prb_bw = prb_bw
+        self.gamma = gamma
+        self.horizon = horizon
         self.ru_x = ru_x
         self.ru_y = ru_y
         self.channel = channel

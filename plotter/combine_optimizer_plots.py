@@ -77,17 +77,39 @@ def _plot_metric(
     y_label: str,
     out_path: str,
 ) -> None:
-    plt.figure()
+    color_map = {
+        "greedy": "#d62728",
+        "ga": "#f2b600",
+        "pso": "#2f7ed8",
+        "average": "#2ca02c",
+        "random": "#7f7f7f",
+        "static": "#9467bd",
+        "rl": "#8c564b",
+    }
+    label_map = {}
+
+    plt.figure(figsize=(8.2, 5.4))
     for optimizer, series in sorted(data.items()):
         xs = [x for x, _ in series]
         ys = [y for _, y in series]
         if not xs:
             continue
-        plt.plot(xs, ys, marker="o", label=optimizer)
+        color = color_map.get(optimizer, None)
+        label = label_map.get(optimizer, optimizer.upper())
+        plt.plot(
+            xs,
+            ys,
+            marker="D",
+            markersize=5.5,
+            linewidth=2.0,
+            color=color,
+            label=label,
+        )
     plt.xlabel("Number of UEs")
     plt.ylabel(y_label)
     plt.title(f"Number of UEs vs {metric_name} (All Optimizers)")
-    plt.legend()
+    plt.grid(True, color="#b0b0b0", alpha=0.6)
+    plt.legend(loc="upper left", frameon=True)
     plt.tight_layout()
     plt.savefig(out_path)
     plt.close()

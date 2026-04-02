@@ -134,7 +134,7 @@ class MPCSimulator:
                 if t >= self.num_steps or u >= self.num_ues:
                     raise ValueError(
                         f"CSV row (t={t}, ue_id={u}) out of bounds — "
-                        "re-generate the dataset or update configurations/config.yaml."
+                        "re-generate the dataset or update gNodeB/configurations/config.yaml."
                     )
                 positions[t, u, 0] = float(row["x_km"])
                 positions[t, u, 1] = float(row["y_km"])

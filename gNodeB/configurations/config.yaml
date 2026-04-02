@@ -48,7 +48,7 @@ PRBS:
 
 reward:
   profit_sensitivity: 1.0
-  satisfaction_sensitivity: 10.0
+  satisfaction_sensitivity: 100.0
 
 mobility_pattern:
   std_s: 0.5
@@ -72,7 +72,7 @@ lstm:
     dataset_csv: "lstm/lstm_training_dataset.csv"
 
 simulation:
-  num_ues_list: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
+  num_ues_list: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
   num_steps: 30
   prediction_horizon: 5
   control_horizon: 5
@@ -81,7 +81,7 @@ simulation:
 
 optimizer:
   ga:
-    population: 1000
+    population: 100
     generations: 40
     elite_frac: 0.15
     mutation_rate: 0.2
@@ -95,8 +95,6 @@ optimizer:
     inertia: 0.7
     c1: 1.4
     c2: 1.4
-  rl:
-    policy_path: ""
 
 logging:
   enabled: true

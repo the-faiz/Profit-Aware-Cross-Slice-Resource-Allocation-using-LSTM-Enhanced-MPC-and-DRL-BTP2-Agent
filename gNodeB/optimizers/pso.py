@@ -6,6 +6,7 @@ from typing import Dict, List
 import numpy as np
 
 from utilities.reward import compute_reward_scalar
+from .heuristics import warm_start_allocations
 from .base import BaseOptimizer
 
 
@@ -45,6 +46,7 @@ class PSOOptimizer(BaseOptimizer):
         self.pso_inertia = float(cfg.get("inertia", 0.7))
         self.pso_c1 = float(cfg.get("c1", 1.4))
         self.pso_c2 = float(cfg.get("c2", 1.4))
+        self.allow_unused_prbs = bool(cfg.get("allow_unused_prbs", True))
 
         self._rng = np.random.default_rng()
 
@@ -53,9 +55,24 @@ class PSOOptimizer(BaseOptimizer):
         if num_ues == 0 or self.horizon == 0:
             return []
 
-        dim = num_ues * self.horizon
+        slack = 1 if self.allow_unused_prbs else 0
+        dim = (num_ues + slack) * self.horizon
         particles = self._rng.random((self.pso_particles, dim))
         velocities = self._rng.normal(scale=0.1, size=(self.pso_particles, dim))
+
+        warm_allocs = warm_start_allocations(
+            pred_positions,
+            user_tiers,
+            num_prbs=self.num_prbs,
+            prb_bw=self.prb_bw,
+            ru_x=self.ru_x,
+            ru_y=self.ru_y,
+            channel=self.channel,
+            tiers_cfg=self.tiers_cfg,
+        )
+        if warm_allocs:
+            for i, alloc in enumerate(warm_allocs[: self.pso_particles]):
+                particles[i] = self._encode_allocation(alloc, num_ues)
 
         pbest = particles.copy()
         pbest_scores = np.full(self.pso_particles, -float("inf"), dtype=float)
@@ -92,20 +109,51 @@ class PSOOptimizer(BaseOptimizer):
         best_alloc = self._decode_allocation(gbest, num_ues)
         return best_alloc[:, 0].tolist()
 
+    def _encode_allocation(self, alloc: List[int], num_ues: int) -> np.ndarray:
+        slack = 1 if self.allow_unused_prbs else 0
+        block = num_ues + slack
+        vec = np.zeros(block * self.horizon, dtype=float)
+        used = float(sum(alloc))
+        unused = max(0.0, float(self.num_prbs) - used)
+        for h in range(self.horizon):
+            start = h * block
+            vec[start : start + num_ues] = np.array(alloc, dtype=float)
+            if self.allow_unused_prbs:
+                vec[start + num_ues] = unused
+        return vec
+
     def _decode_allocation(self, vec: np.ndarray, num_ues: int) -> np.ndarray:
         alloc = np.zeros((num_ues, self.horizon), dtype=int)
+        slack = 1 if self.allow_unused_prbs else 0
+        block = num_ues + slack
         for h in range(self.horizon):
-            start = h * num_ues
-            end = start + num_ues
+            start = h * block
+            end = start + block
             weights = vec[start:end]
             weights_sum = float(weights.sum())
             if weights_sum <= 0:
                 alloc[:, h] = 0
                 continue
-            alloc[:, h] = np.floor(weights / weights_sum * self.num_prbs).astype(int)
-            remainder = self.num_prbs - int(alloc[:, h].sum())
+
+            user_weights = weights[:num_ues]
+            user_sum = float(user_weights.sum())
+            if user_sum <= 0:
+                alloc[:, h] = 0
+                continue
+
+            if self.allow_unused_prbs:
+                total_for_users = int(
+                    np.floor(self.num_prbs * (user_sum / weights_sum))
+                )
+            else:
+                total_for_users = self.num_prbs
+
+            alloc[:, h] = np.floor(
+                user_weights / user_sum * total_for_users
+            ).astype(int)
+            remainder = total_for_users - int(alloc[:, h].sum())
             if remainder > 0:
-                idx = np.argsort(-weights)[:remainder]
+                idx = np.argsort(-user_weights)[:remainder]
                 for i in idx:
                     alloc[i, h] += 1
         return alloc

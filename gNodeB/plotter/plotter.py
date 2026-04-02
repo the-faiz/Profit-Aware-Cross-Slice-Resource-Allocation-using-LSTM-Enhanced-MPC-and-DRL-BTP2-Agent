@@ -8,21 +8,25 @@ from typing import List, Tuple
 import matplotlib.pyplot as plt
 
 
-def _parse_log(path: str) -> List[Tuple[int, float, float, float]]:
+def _parse_log(path: str) -> List[Tuple[int, float, float, float, float]]:
     """
-    Return rows of (num_ues, avg_reward, avg_profit, avg_satisfied_users).
+    Return rows of (num_ues, avg_reward, avg_profit, avg_satisfied_users, latency_per_step_s).
     """
-    rows: List[Tuple[int, float, float, float]] = []
+    rows: List[Tuple[int, float, float, float, float]] = []
     current_ues: int | None = None
     avg_reward: float | None = None
     avg_profit: float | None = None
     avg_satisfied: float | None = None
+    latency_per_step: float | None = None
 
     sim_re = re.compile(r"^Simulating\s+(\d+)\s+UEs\b")
     avg_reward_re = re.compile(r"^Average reward\s*:\s*([-+]?\d+(?:\.\d+)?)")
     avg_profit_re = re.compile(r"^Average profit\s*:\s*([-+]?\d+(?:\.\d+)?)")
     avg_satisfied_re = re.compile(
         r"^Average satisfied users\s*:\s*([-+]?\d+(?:\.\d+)?)"
+    )
+    per_step_re = re.compile(
+        r"^\s*Total time\s*:\s*[-+]?\d+(?:\.\d+)?s\s*\(([-+]?\d+(?:\.\d+)?)s per step\)"
     )
 
     with open(path, "r", encoding="utf-8") as f:
@@ -34,6 +38,7 @@ def _parse_log(path: str) -> List[Tuple[int, float, float, float]]:
                 avg_reward = None
                 avg_profit = None
                 avg_satisfied = None
+                latency_per_step = None
                 continue
 
             if current_ues is None:
@@ -53,19 +58,42 @@ def _parse_log(path: str) -> List[Tuple[int, float, float, float]]:
             if satisfied_match:
                 avg_satisfied = float(satisfied_match.group(1))
 
+            per_step_match = per_step_re.match(line)
+            if per_step_match:
+                latency_per_step = float(per_step_match.group(1))
+
             if (
                 current_ues is not None
                 and avg_reward is not None
                 and avg_profit is not None
                 and avg_satisfied is not None
+                and latency_per_step is not None
             ):
-                rows.append((current_ues, avg_reward, avg_profit, avg_satisfied))
+                rows.append(
+                    (current_ues, avg_reward, avg_profit, avg_satisfied, latency_per_step)
+                )
                 current_ues = None
                 avg_reward = None
                 avg_profit = None
                 avg_satisfied = None
+                latency_per_step = None
 
     return rows
+
+
+def _style_for_optimizer(optimizer: str) -> tuple[str | None, str]:
+    color_map = {
+        "greedy": "#d62728",
+        "ga": "#f2b600",
+        "pso": "#2f7ed8",
+        "average": "#2ca02c",
+        "random": "#7f7f7f",
+        "static": "#9467bd",
+    }
+    label_map = {}
+    color = color_map.get(optimizer, None)
+    label = label_map.get(optimizer, optimizer.upper())
+    return color, label
 
 
 def _plot_series(
@@ -74,12 +102,26 @@ def _plot_series(
     title: str,
     y_label: str,
     out_path: str,
+    optimizer: str,
 ) -> None:
-    plt.figure()
-    plt.plot(xs, ys, marker="o")
+    color, label = _style_for_optimizer(optimizer)
+    plt.figure(figsize=(8.2, 5.4))
+    plt.plot(
+        xs,
+        ys,
+        marker="D",
+        markersize=5.5,
+        linewidth=2.0,
+        color=color,
+        label=label,
+    )
     plt.xlabel("Number of UEs")
     plt.ylabel(y_label)
     plt.title(title)
+    if xs:
+        plt.xticks(sorted(set(xs)))
+    plt.grid(True, color="#b0b0b0", alpha=0.6)
+    plt.legend(loc="upper left", frameon=True)
     plt.tight_layout()
     plt.savefig(out_path)
     plt.close()
@@ -109,6 +151,7 @@ def main() -> None:
         avg_reward = [r[1] for r in rows]
         avg_profit = [r[2] for r in rows]
         avg_satisfied = [r[3] for r in rows]
+        latency_per_step = [r[4] for r in rows]
 
         avg_reward_pp = [r[1] / r[0] if r[0] else 0.0 for r in rows]
         avg_profit_pp = [r[2] / r[0] if r[0] else 0.0 for r in rows]
@@ -123,6 +166,7 @@ def main() -> None:
             "Number of UEs vs Profit",
             "Average Profit",
             os.path.join(opt_out_dir, f"nues_vs_profit_{optimizer}.png"),
+            optimizer,
         )
         _plot_series(
             xs,
@@ -130,6 +174,7 @@ def main() -> None:
             "Number of UEs vs Reward",
             "Average Reward",
             os.path.join(opt_out_dir, f"nues_vs_reward_{optimizer}.png"),
+            optimizer,
         )
         _plot_series(
             xs,
@@ -137,6 +182,7 @@ def main() -> None:
             "Number of UEs vs Satisfaction",
             "Average Satisfied Users",
             os.path.join(opt_out_dir, f"nues_vs_satisfaction_{optimizer}.png"),
+            optimizer,
         )
         _plot_series(
             xs,
@@ -144,6 +190,7 @@ def main() -> None:
             "Number of UEs vs Average Reward per Person",
             "Average Reward per Person",
             os.path.join(opt_out_dir, f"nues_vs_reward_per_person_{optimizer}.png"),
+            optimizer,
         )
         _plot_series(
             xs,
@@ -151,6 +198,7 @@ def main() -> None:
             "Number of UEs vs Average Profit per Person",
             "Average Profit per Person",
             os.path.join(opt_out_dir, f"nues_vs_profit_per_person_{optimizer}.png"),
+            optimizer,
         )
         _plot_series(
             xs,
@@ -158,6 +206,15 @@ def main() -> None:
             "Number of UEs vs Average Satisfaction per Person",
             "Average Satisfaction per Person",
             os.path.join(opt_out_dir, f"nues_vs_satisfaction_per_person_{optimizer}.png"),
+            optimizer,
+        )
+        _plot_series(
+            xs,
+            latency_per_step,
+            "Number of UEs vs Allocation Latency per Step",
+            "Latency per Step (s)",
+            os.path.join(opt_out_dir, f"nues_vs_latency_per_step_{optimizer}.png"),
+            optimizer,
         )
 
     print(f"Saved per-optimizer plots to {out_dir}")

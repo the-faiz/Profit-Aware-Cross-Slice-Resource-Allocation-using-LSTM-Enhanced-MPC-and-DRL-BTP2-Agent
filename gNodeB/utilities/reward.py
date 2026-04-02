@@ -11,8 +11,8 @@
 #                     profit_sensitivity * profit_u
 #                     + satisfaction_sensitivity * weight[tier_u] * satisfaction_u
 #                   )
-#   required_t    = ceil(min_percent[t] * count[t])
-#   deficit_t     = max(0, required_t - satisfied_count_t)
+#   required_t    = min_percent[t] * count[t]
+#   deficit_t     = max(0, required_t - sum_satisfaction_t)
 #   penalty       = lambda * sum_t deficit_t
 #   reward        = reward_base + penalty
 
@@ -85,10 +85,8 @@ def compute_reward_components(
 
     penalty = 0.0
     for tier, count in tier_stats.items():
-        required = math.ceil(
-            float(tiers_cfg[tier]["min_percent_of_user_to_satisfy"]) * count
-        )
-        deficit = max(0.0, required - tier_sat_count[tier])
+        required = float(tiers_cfg[tier]["min_percent_of_user_to_satisfy"]) * count
+        deficit = max(0.0, required - tier_sat_sum[tier])
         penalty += penalty_lambda * deficit
 
     reward = reward_base + penalty

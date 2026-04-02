@@ -6,24 +6,29 @@ import re
 from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 
-def _parse_log(path: str) -> List[Tuple[int, float, float, float]]:
+def _parse_log(path: str) -> List[Tuple[int, float, float, float, float]]:
     """
     Parse a simulation log file and return rows of:
-    (num_ues, avg_reward, avg_profit, avg_satisfied_users)
+    (num_ues, avg_reward, avg_profit, avg_satisfied_users, latency_per_step_s)
     """
-    rows: List[Tuple[int, float, float, float]] = []
+    rows: List[Tuple[int, float, float, float, float]] = []
     current_ues: int | None = None
     avg_reward: float | None = None
     avg_profit: float | None = None
     avg_satisfied: float | None = None
+    latency_per_step: float | None = None
 
     sim_re = re.compile(r"^Simulating\s+(\d+)\s+UEs\b")
     avg_reward_re = re.compile(r"^Average reward\s*:\s*([-+]?\d+(?:\.\d+)?)")
     avg_profit_re = re.compile(r"^Average profit\s*:\s*([-+]?\d+(?:\.\d+)?)")
     avg_satisfied_re = re.compile(
         r"^Average satisfied users\s*:\s*([-+]?\d+(?:\.\d+)?)"
+    )
+    per_step_re = re.compile(
+        r"^\s*Total time\s*:\s*[-+]?\d+(?:\.\d+)?s\s*\(([-+]?\d+(?:\.\d+)?)s per step\)"
     )
 
     with open(path, "r", encoding="utf-8") as f:
@@ -37,6 +42,7 @@ def _parse_log(path: str) -> List[Tuple[int, float, float, float]]:
                 avg_reward = None
                 avg_profit = None
                 avg_satisfied = None
+                latency_per_step = None
                 continue
 
             if current_ues is None:
@@ -56,17 +62,25 @@ def _parse_log(path: str) -> List[Tuple[int, float, float, float]]:
             if satisfied_match:
                 avg_satisfied = float(satisfied_match.group(1))
 
+            per_step_match = per_step_re.match(line)
+            if per_step_match:
+                latency_per_step = float(per_step_match.group(1))
+
             if (
                 current_ues is not None
                 and avg_reward is not None
                 and avg_profit is not None
                 and avg_satisfied is not None
+                and latency_per_step is not None
             ):
-                rows.append((current_ues, avg_reward, avg_profit, avg_satisfied))
+                rows.append(
+                    (current_ues, avg_reward, avg_profit, avg_satisfied, latency_per_step)
+                )
                 current_ues = None
                 avg_reward = None
                 avg_profit = None
                 avg_satisfied = None
+                latency_per_step = None
 
     return rows
 
@@ -82,9 +96,13 @@ def _plot_metric(
         "ga": "#f2b600",
         "pso": "#2f7ed8",
         "average": "#2ca02c",
+        "hybrid_avg_deficit": "#bcbd22",
+        "deficit_aware": "#ff7f0e",
+        "tier_quota": "#17becf",
+        "topk_priority": "#8c564b",
+        "target_rate": "#e377c2",
         "random": "#7f7f7f",
         "static": "#9467bd",
-        "rl": "#8c564b",
     }
     label_map = {}
 
@@ -108,11 +126,63 @@ def _plot_metric(
     plt.xlabel("Number of UEs")
     plt.ylabel(y_label)
     plt.title(f"Number of UEs vs {metric_name} (All Optimizers)")
+    all_xs = sorted({x for series in data.values() for x, _ in series})
+    if all_xs:
+        plt.xticks(all_xs)
     plt.grid(True, color="#b0b0b0", alpha=0.6)
-    plt.legend(loc="upper left", frameon=True)
     plt.tight_layout()
     plt.savefig(out_path)
     plt.close()
+
+
+def _build_legend_handles(
+    data: Dict[str, List[Tuple[int, float]]],
+) -> List[Line2D]:
+    color_map = {
+        "greedy": "#d62728",
+        "ga": "#f2b600",
+        "pso": "#2f7ed8",
+        "average": "#2ca02c",
+        "hybrid_avg_deficit": "#bcbd22",
+        "deficit_aware": "#ff7f0e",
+        "tier_quota": "#17becf",
+        "topk_priority": "#8c564b",
+        "target_rate": "#e377c2",
+        "random": "#7f7f7f",
+        "static": "#9467bd",
+    }
+    label_map = {}
+    handles: List[Line2D] = []
+    for optimizer in sorted(data.keys()):
+        color = color_map.get(optimizer, None)
+        label = label_map.get(optimizer, optimizer.upper())
+        handles.append(
+            Line2D(
+                [0],
+                [0],
+                color=color,
+                marker="D",
+                markersize=5.5,
+                linewidth=2.0,
+                label=label,
+            )
+        )
+    return handles
+
+
+def _save_legend(handles: List[Line2D], out_path: str) -> None:
+    if not handles:
+        return
+    fig = plt.figure(figsize=(8.2, max(1.2, 0.4 * len(handles))))
+    fig.legend(
+        handles=handles,
+        loc="center",
+        frameon=True,
+        ncol=1,
+    )
+    fig.tight_layout()
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
 
 
 def main() -> None:
@@ -128,6 +198,7 @@ def main() -> None:
     reward_data: Dict[str, List[Tuple[int, float]]] = {}
     profit_data: Dict[str, List[Tuple[int, float]]] = {}
     satisfied_data: Dict[str, List[Tuple[int, float]]] = {}
+    latency_data: Dict[str, List[Tuple[int, float]]] = {}
     reward_pp_data: Dict[str, List[Tuple[int, float]]] = {}
     profit_pp_data: Dict[str, List[Tuple[int, float]]] = {}
     satisfied_pp_data: Dict[str, List[Tuple[int, float]]] = {}
@@ -142,6 +213,7 @@ def main() -> None:
         reward_data[optimizer] = [(r[0], r[1]) for r in rows]
         profit_data[optimizer] = [(r[0], r[2]) for r in rows]
         satisfied_data[optimizer] = [(r[0], r[3]) for r in rows]
+        latency_data[optimizer] = [(r[0], r[4]) for r in rows]
         reward_pp_data[optimizer] = [
             (r[0], r[1] / r[0] if r[0] else 0.0) for r in rows
         ]
@@ -171,6 +243,12 @@ def main() -> None:
         os.path.join(out_dir, "nues_vs_satisfaction_all.png"),
     )
     _plot_metric(
+        latency_data,
+        "Allocation Latency per Step",
+        "Latency per Step (s)",
+        os.path.join(out_dir, "nues_vs_latency_per_step_all.png"),
+    )
+    _plot_metric(
         reward_pp_data,
         "Reward per Person",
         "Average Reward per Person",
@@ -188,6 +266,9 @@ def main() -> None:
         "Average Satisfaction per Person",
         os.path.join(out_dir, "nues_vs_satisfaction_per_person_all.png"),
     )
+
+    handles = _build_legend_handles(reward_data)
+    _save_legend(handles, os.path.join(out_dir, "one.png"))
 
     print(f"Saved combined plots to {out_dir}")
 

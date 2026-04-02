@@ -3,14 +3,47 @@
 from __future__ import annotations
 
 import numpy as np
+from pathlib import Path
 from typing import Iterable, Sequence, Tuple
 
 import yaml
 
+BASE_DIR = Path(__file__).resolve().parents[1]
+
+
+def get_base_dir() -> Path:
+    return BASE_DIR
+
+
+def resolve_path(path: str | Path) -> str:
+    p = Path(path)
+    if not p.is_absolute():
+        p = BASE_DIR / p
+    return str(p)
+
 
 def load_config(path: str = "configurations/config.yaml") -> dict:
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    config_path = Path(path)
+    if not config_path.is_absolute():
+        config_path = BASE_DIR / config_path
+    with open(config_path, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+
+    sim_cfg = cfg.get("simulation", {})
+    train_cfg = cfg.get("lstm", {}).get("training", {})
+    log_cfg = cfg.get("logging", {})
+
+    for key in ("model_out", "norm_out", "dataset_csv"):
+        if isinstance(train_cfg.get(key), str):
+            train_cfg[key] = resolve_path(train_cfg[key])
+
+    if isinstance(sim_cfg.get("dataset_csv"), str):
+        sim_cfg["dataset_csv"] = resolve_path(sim_cfg["dataset_csv"])
+
+    if isinstance(log_cfg.get("path"), str):
+        log_cfg["path"] = resolve_path(log_cfg["path"])
+
+    return cfg
 
 
 def write_csv(

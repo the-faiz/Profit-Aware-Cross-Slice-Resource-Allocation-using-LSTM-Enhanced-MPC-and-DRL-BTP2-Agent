@@ -8,6 +8,7 @@ import numpy as np
 
 from channel.channel_model import Channel
 from utilities.reward import compute_reward_scalar
+from .heuristics import warm_start_allocations
 from .base import BaseOptimizer
 
 
@@ -50,6 +51,7 @@ class GAOptimizer(BaseOptimizer):
         self.ga_tournament_k = int(cfg.get("tournament_k", 3))
         self.ga_stall_limit = int(cfg.get("stall_limit", 10))
         self.ga_seed_full_frac = float(cfg.get("seed_full_frac", 0.0))
+        self.allow_unused_prbs = bool(cfg.get("allow_unused_prbs", True))
 
         self._rng = np.random.default_rng()
 
@@ -74,6 +76,20 @@ class GAOptimizer(BaseOptimizer):
             return []
 
         population = self._init_population(num_ues, self.horizon, M)
+        warm_allocs = warm_start_allocations(
+            pred_positions,
+            user_tiers,
+            num_prbs=self.num_prbs,
+            prb_bw=self.prb_bw,
+            ru_x=self.ru_x,
+            ru_y=self.ru_y,
+            channel=self.channel,
+            tiers_cfg=self.tiers_cfg,
+        )
+        if warm_allocs:
+            for i, alloc in enumerate(warm_allocs[: self.ga_population]):
+                for h in range(self.horizon):
+                    population[i, :, h] = np.array(alloc, dtype=int)
         best_score = -float("inf")
         best_alloc = None
         stall = 0
@@ -132,7 +148,9 @@ class GAOptimizer(BaseOptimizer):
         pop = np.zeros((self.ga_population, num_ues, horizon), dtype=int)
         for i in range(self.ga_population):
             for h in range(horizon):
-                if self._rng.random() < self.ga_seed_full_frac:
+                if not self.allow_unused_prbs:
+                    total = M
+                elif self._rng.random() < self.ga_seed_full_frac:
                     total = M
                 else:
                     total = int(self._rng.integers(0, M + 1))
@@ -208,9 +226,17 @@ class GAOptimizer(BaseOptimizer):
                 continue
             total = int(child[:, h].sum())
             if total == 0:
-                child[:, h] = self._sample_allocation(child.shape[0], M)
+                if self.allow_unused_prbs:
+                    new_total = int(self._rng.integers(0, M + 1))
+                    child[:, h] = self._sample_allocation(child.shape[0], new_total)
+                else:
+                    child[:, h] = self._sample_allocation(child.shape[0], M)
                 continue
-            child[:, h] = self._sample_allocation(child.shape[0], min(M, total))
+            if self.allow_unused_prbs:
+                new_total = int(self._rng.integers(0, min(M, total) + 1))
+                child[:, h] = self._sample_allocation(child.shape[0], new_total)
+            else:
+                child[:, h] = self._sample_allocation(child.shape[0], min(M, total))
 
     def _repair(self, child: np.ndarray, M: int) -> None:
         num_ues, horizon = child.shape

@@ -85,6 +85,9 @@ class GreedyOptimizer(BaseOptimizer):
                     best_gain = gain
                     best_u = u
 
+            if best_gain <= 0.0:
+                break
+
             alloc[best_u] += 1
 
         return alloc.tolist()

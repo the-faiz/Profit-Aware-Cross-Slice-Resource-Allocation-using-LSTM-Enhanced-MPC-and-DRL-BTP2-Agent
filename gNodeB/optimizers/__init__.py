@@ -3,12 +3,16 @@ from __future__ import annotations
 from typing import Dict
 
 from .average import AverageOptimizer
+from .deficit_aware import DeficitAwareOptimizer
 from .ga import GAOptimizer
 from .greedy import GreedyOptimizer
+from .hybrid_avg_deficit import HybridAverageDeficitOptimizer
 from .pso import PSOOptimizer
 from .random_alloc import RandomOptimizer
-from .rl import RLOptimizer
 from .static import StaticOptimizer
+from .tier_quota import TierQuotaOptimizer
+from .topk_priority import TopKPriorityOptimizer
+from .target_rate import TargetRateProportionalOptimizer
 
 
 def make_optimizer(name: str, cfg: Dict) -> object:
@@ -52,11 +56,44 @@ def make_optimizer(name: str, cfg: Dict) -> object:
         return StaticOptimizer(num_prbs=common["num_prbs"])
     if name in {"average", "avg"}:
         return AverageOptimizer(num_prbs=common["num_prbs"], tiers_cfg=tiers_cfg)
+    if name in {"hybrid_avg_deficit", "hybrid", "avg_deficit"}:
+        return HybridAverageDeficitOptimizer(
+            num_prbs=common["num_prbs"],
+            prb_bw=common["prb_bw"],
+            ru_x=common["ru_x"],
+            ru_y=common["ru_y"],
+            channel=channel,
+            tiers_cfg=tiers_cfg,
+        )
+    if name in {"deficit_aware", "deficit-aware", "deficit"}:
+        return DeficitAwareOptimizer(
+            num_prbs=common["num_prbs"],
+            prb_bw=common["prb_bw"],
+            ru_x=common["ru_x"],
+            ru_y=common["ru_y"],
+            channel=channel,
+            tiers_cfg=tiers_cfg,
+        )
+    if name in {"tier_quota", "quota", "tier-quota"}:
+        return TierQuotaOptimizer(num_prbs=common["num_prbs"], tiers_cfg=tiers_cfg)
+    if name in {"topk", "topk_priority", "top-k"}:
+        return TopKPriorityOptimizer(
+            num_prbs=common["num_prbs"],
+            ru_x=common["ru_x"],
+            ru_y=common["ru_y"],
+            channel=channel,
+        )
+    if name in {"target_rate", "target-rate", "target"}:
+        return TargetRateProportionalOptimizer(
+            num_prbs=common["num_prbs"],
+            prb_bw=common["prb_bw"],
+            ru_x=common["ru_x"],
+            ru_y=common["ru_y"],
+            channel=channel,
+            tiers_cfg=tiers_cfg,
+        )
     if name in {"random", "rand"}:
         return RandomOptimizer(num_prbs=common["num_prbs"])
-    if name in {"rl"}:
-        return RLOptimizer(channel=channel, rl_config=opt_cfg.get("rl", {}), **common)
-
     raise ValueError(
-        "Unknown optimizer '{name}'. Choose from: ga, pso, greedy, static, average, random, rl."
+        "Unknown optimizer '{name}'. Choose from: ga, pso, greedy, static, average, hybrid_avg_deficit, deficit_aware, tier_quota, topk_priority, target_rate, random."
     )

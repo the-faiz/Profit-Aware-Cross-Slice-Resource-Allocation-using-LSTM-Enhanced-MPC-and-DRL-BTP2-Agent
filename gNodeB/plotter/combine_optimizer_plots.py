@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import glob
 import os
 import re
@@ -135,6 +136,63 @@ def _plot_metric(
     plt.close()
 
 
+def _plot_metric_bar(
+    data: Dict[str, List[Tuple[int, float]]],
+    metric_name: str,
+    y_label: str,
+    out_path: str,
+) -> None:
+    color_map = {
+        "greedy": "#d62728",
+        "ga": "#f2b600",
+        "pso": "#2f7ed8",
+        "average": "#2ca02c",
+        "hybrid_avg_deficit": "#bcbd22",
+        "deficit_aware": "#ff7f0e",
+        "tier_quota": "#17becf",
+        "topk_priority": "#8c564b",
+        "target_rate": "#e377c2",
+        "random": "#7f7f7f",
+        "static": "#9467bd",
+    }
+    label_map = {}
+
+    optimizers = sorted(data.keys())
+    all_xs = sorted({x for series in data.values() for x, _ in series})
+    if not optimizers or not all_xs:
+        return
+
+    index = list(range(len(all_xs)))
+    n_opts = len(optimizers)
+    total_width = 0.8
+    bar_width = total_width / max(1, n_opts)
+    start = -total_width / 2.0 + bar_width / 2.0
+
+    plt.figure(figsize=(8.2, 5.4))
+    for opt_idx, optimizer in enumerate(optimizers):
+        series = dict(data.get(optimizer, []))
+        ys = [series.get(x, 0.0) for x in all_xs]
+        offsets = [i + start + opt_idx * bar_width for i in index]
+        color = color_map.get(optimizer, None)
+        label = label_map.get(optimizer, optimizer.upper())
+        plt.bar(
+            offsets,
+            ys,
+            width=bar_width,
+            color=color,
+            label=label,
+        )
+
+    plt.xlabel("Number of UEs")
+    plt.ylabel(y_label)
+    plt.title(f"Number of UEs vs {metric_name} (All Optimizers)")
+    plt.xticks(index, [str(x) for x in all_xs])
+    plt.grid(True, axis="y", color="#b0b0b0", alpha=0.6)
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+
 def _build_legend_handles(
     data: Dict[str, List[Tuple[int, float]]],
 ) -> List[Line2D]:
@@ -186,6 +244,15 @@ def _save_legend(handles: List[Line2D], out_path: str) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Combine optimizer plots.")
+    parser.add_argument(
+        "--plot-type",
+        choices=["line", "bar"],
+        default="line",
+        help="Plot type to generate (line or bar).",
+    )
+    args = parser.parse_args()
+
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     logs_dir = os.path.join(root_dir, "logs")
     out_dir = os.path.join(root_dir, "results", "combined")
@@ -224,43 +291,45 @@ def main() -> None:
             (r[0], r[3] / r[0] if r[0] else 0.0) for r in rows
         ]
 
-    _plot_metric(
+    plotter = _plot_metric_bar if args.plot_type == "bar" else _plot_metric
+
+    plotter(
         profit_data,
         "Profit",
         "Average Profit",
         os.path.join(out_dir, "nues_vs_profit_all.png"),
     )
-    _plot_metric(
+    plotter(
         reward_data,
         "Reward",
         "Average Reward",
         os.path.join(out_dir, "nues_vs_reward_all.png"),
     )
-    _plot_metric(
+    plotter(
         satisfied_data,
         "Satisfaction",
         "Average Satisfied Users",
         os.path.join(out_dir, "nues_vs_satisfaction_all.png"),
     )
-    _plot_metric(
+    plotter(
         latency_data,
         "Allocation Latency per Step",
         "Latency per Step (s)",
         os.path.join(out_dir, "nues_vs_latency_per_step_all.png"),
     )
-    _plot_metric(
+    plotter(
         reward_pp_data,
         "Reward per Person",
         "Average Reward per Person",
         os.path.join(out_dir, "nues_vs_reward_per_person_all.png"),
     )
-    _plot_metric(
+    plotter(
         profit_pp_data,
         "Profit per Person",
         "Average Profit per Person",
         os.path.join(out_dir, "nues_vs_profit_per_person_all.png"),
     )
-    _plot_metric(
+    plotter(
         satisfied_pp_data,
         "Satisfaction per Person",
         "Average Satisfaction per Person",

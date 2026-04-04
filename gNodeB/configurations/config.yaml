@@ -79,6 +79,10 @@ simulation:
   discount_gamma: 0.99
   dataset_csv: "simulation/simulation_dataset.csv"
 
+plotting:
+  plot_type: bar # bar or line
+  num_ues_list: [20, 40, 60, 80, 100, 120, 140, 160, 180, 200]
+
 optimizer:
   ga:
     population: 100

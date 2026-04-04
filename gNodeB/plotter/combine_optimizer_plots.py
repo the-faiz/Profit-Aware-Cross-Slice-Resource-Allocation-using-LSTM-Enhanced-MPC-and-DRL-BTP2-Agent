@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-import argparse
 import glob
 import os
 import re
+import sys
+from pathlib import Path as _Path
 from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
+ROOT_DIR = _Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from utilities.utils import load_config
 
 def _parse_log(path: str) -> List[Tuple[int, float, float, float, float]]:
     """
@@ -91,6 +97,7 @@ def _plot_metric(
     metric_name: str,
     y_label: str,
     out_path: str,
+    x_order: List[int] | None = None,
 ) -> None:
     color_map = {
         "greedy": "#d62728",
@@ -127,7 +134,10 @@ def _plot_metric(
     plt.xlabel("Number of UEs")
     plt.ylabel(y_label)
     plt.title(f"Number of UEs vs {metric_name} (All Optimizers)")
-    all_xs = sorted({x for series in data.values() for x, _ in series})
+    if x_order:
+        all_xs = [x for x in x_order if any(x == sx for series in data.values() for sx, _ in series)]
+    else:
+        all_xs = sorted({x for series in data.values() for x, _ in series})
     if all_xs:
         plt.xticks(all_xs)
     plt.grid(True, color="#b0b0b0", alpha=0.6)
@@ -141,6 +151,7 @@ def _plot_metric_bar(
     metric_name: str,
     y_label: str,
     out_path: str,
+    x_order: List[int] | None = None,
 ) -> None:
     color_map = {
         "greedy": "#d62728",
@@ -158,7 +169,10 @@ def _plot_metric_bar(
     label_map = {}
 
     optimizers = sorted(data.keys())
-    all_xs = sorted({x for series in data.values() for x, _ in series})
+    if x_order:
+        all_xs = [x for x in x_order if any(x == sx for series in data.values() for sx, _ in series)]
+    else:
+        all_xs = sorted({x for series in data.values() for x, _ in series})
     if not optimizers or not all_xs:
         return
 
@@ -171,8 +185,12 @@ def _plot_metric_bar(
     plt.figure(figsize=(8.2, 5.4))
     for opt_idx, optimizer in enumerate(optimizers):
         series = dict(data.get(optimizer, []))
-        ys = [series.get(x, 0.0) for x in all_xs]
-        offsets = [i + start + opt_idx * bar_width for i in index]
+        offsets = []
+        ys = []
+        for i, x in enumerate(all_xs):
+            if x in series:
+                offsets.append(i + start + opt_idx * bar_width)
+                ys.append(series[x])
         color = color_map.get(optimizer, None)
         label = label_map.get(optimizer, optimizer.upper())
         plt.bar(
@@ -244,19 +262,17 @@ def _save_legend(handles: List[Line2D], out_path: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Combine optimizer plots.")
-    parser.add_argument(
-        "--plot-type",
-        choices=["line", "bar"],
-        default="line",
-        help="Plot type to generate (line or bar).",
-    )
-    args = parser.parse_args()
-
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     logs_dir = os.path.join(root_dir, "logs")
     out_dir = os.path.join(root_dir, "results", "combined")
     os.makedirs(out_dir, exist_ok=True)
+
+    cfg = load_config()
+    plot_cfg = cfg.get("plotting", {})
+    plot_type = str(plot_cfg.get("plot_type", "line")).lower()
+    num_ues_list = plot_cfg.get("num_ues_list", [])
+    if not isinstance(num_ues_list, list) or not num_ues_list:
+        raise SystemExit("plotting.num_ues_list must be a non-empty list in config.")
 
     log_paths = sorted(glob.glob(os.path.join(logs_dir, "simulation_*.log")))
     if not log_paths:
@@ -275,7 +291,9 @@ def main() -> None:
         rows = _parse_log(path)
         if not rows:
             continue
-        rows.sort(key=lambda r: r[0])
+        order_index = {v: i for i, v in enumerate(num_ues_list)}
+        rows = [r for r in rows if r[0] in order_index]
+        rows.sort(key=lambda r: order_index[r[0]])
 
         reward_data[optimizer] = [(r[0], r[1]) for r in rows]
         profit_data[optimizer] = [(r[0], r[2]) for r in rows]
@@ -291,49 +309,56 @@ def main() -> None:
             (r[0], r[3] / r[0] if r[0] else 0.0) for r in rows
         ]
 
-    plotter = _plot_metric_bar if args.plot_type == "bar" else _plot_metric
+    plotter = _plot_metric_bar if plot_type == "bar" else _plot_metric
 
     plotter(
         profit_data,
         "Profit",
         "Average Profit",
         os.path.join(out_dir, "nues_vs_profit_all.png"),
+        x_order=num_ues_list,
     )
     plotter(
         reward_data,
         "Reward",
         "Average Reward",
         os.path.join(out_dir, "nues_vs_reward_all.png"),
+        x_order=num_ues_list,
     )
     plotter(
         satisfied_data,
         "Satisfaction",
         "Average Satisfied Users",
         os.path.join(out_dir, "nues_vs_satisfaction_all.png"),
+        x_order=num_ues_list,
     )
     plotter(
         latency_data,
         "Allocation Latency per Step",
         "Latency per Step (s)",
         os.path.join(out_dir, "nues_vs_latency_per_step_all.png"),
+        x_order=num_ues_list,
     )
     plotter(
         reward_pp_data,
         "Reward per Person",
         "Average Reward per Person",
         os.path.join(out_dir, "nues_vs_reward_per_person_all.png"),
+        x_order=num_ues_list,
     )
     plotter(
         profit_pp_data,
         "Profit per Person",
         "Average Profit per Person",
         os.path.join(out_dir, "nues_vs_profit_per_person_all.png"),
+        x_order=num_ues_list,
     )
     plotter(
         satisfied_pp_data,
         "Satisfaction per Person",
         "Average Satisfaction per Person",
         os.path.join(out_dir, "nues_vs_satisfaction_per_person_all.png"),
+        x_order=num_ues_list,
     )
 
     handles = _build_legend_handles(reward_data)

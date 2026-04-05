@@ -1,0 +1,119 @@
+environment:
+  num_users: 50
+  prbs_available: 100
+  snir_min: 1
+  snir_max: 20.0
+
+prb:
+  cost: 10
+  bandwidth_hz: 2880000.0
+
+vcpu:
+  cost: 0.2
+
+slices:
+  efficiencies:
+    slice_1: 0.9
+    slice_2: 0.8
+    slice_3: 0.7
+
+tiers:
+  tier-1:
+    weight: 3.0
+    probability: 0.2
+    target_rate_mbps: 20.0
+    subscription_fee: 100.0
+  tier-2:
+    weight: 2.0
+    probability: 0.3
+    target_rate_mbps: 10.0
+    subscription_fee: 80.0
+  tier-3:
+    weight: 1.0
+    probability: 0.5
+    target_rate_mbps: 5.0
+    subscription_fee: 50.0
+
+reward:
+  profit_sensitivity: 1.0
+  satisfaction_sensitivity: 10.0
+  enable_min_satisfaction_penalty: true
+  min_percent_of_users_to_satisfy:
+    tier-1: 0.9
+    tier-2: 0.7
+    tier-3: 0.6
+  min_satisfaction_penalty_lambda: 1000.0
+
+
+training:
+  seed: 42
+  algo: PPO
+  timesteps: 2000
+  learning_rate: 0.0001
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.0
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  n_epochs: 10
+  batch_size: 16
+  checkpoint_every: 100
+  n_steps: 64
+  #Custiom DL Architecture for PPO
+  policy:
+    use_custom: false
+    net_arch: [128, 128]
+    activation: relu
+
+evaluation:
+  seed: 123
+  eval_set_size: 100
+  user_counts: [10, 15, 20, 25, 30, 35, 40, 45, 50]
+  algos:
+    - PPO
+    - equal_share_max_acc
+    - greedy_target_rate
+    - min_cost_target_rate
+
+plotting:
+  plot_type: bar
+  smooth_training_curve: true
+  smooth_points_per_segment: 20
+
+generators:
+  vnf_catalog:
+    vnf_count: 10
+    models_per_vnf: 5
+    accuracy_min_pct: 75
+    accuracy_max_pct: 95
+    vcpu_min_units: 8
+    vcpu_max_units: 40
+    vcpu_units_by_slice:
+      slice_1:
+        min: 20
+        max: 40
+      slice_2:
+        min: 10
+        max: 30
+      slice_3:
+        min: 5
+        max: 25
+    vnf_weight_min: 1.0
+    vnf_weight_max: 3.0
+    seed: 42
+
+    
+logging:
+  enabled: true
+  append: false
+
+paths:
+  vnf_catalog_dir: sdn_controller/data/vnf_catalogs
+  log_dir_training: sdn_controller/logs/training
+  train_plot_path: sdn_controller/results/training/train_reward_curve.png
+  eval_output_path: sdn_controller/logs/evaluation/eval_results.log
+  eval_plot_path: sdn_controller/results/evaluations/eval_reward.png
+  model_paths:
+    ppo: sdn_controller/models/ppo_sdn_agent.zip
+    a2c: sdn_controller/models/a2c_sdn_agent.zip
